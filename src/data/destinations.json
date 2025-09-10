@@ -1,0 +1,17 @@
+[
+  {
+    "id": 0,
+    "name": "Hawaii",
+    "imageUrl": "/images/cities/hawaii.jpg"
+  },
+  {
+    "id": 2,
+    "name": "Paris",
+    "imageUrl": "/images/cities/paris.jpg"
+  },
+  {
+    "id": 3,
+    "name": "Barcelona",
+    "imageUrl": "/images/cities/barcelona.jpg"
+  }
+]
