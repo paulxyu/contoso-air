@@ -35,7 +35,7 @@ spec:
             - configMapRef:
                 name: contoso-air-config
             - secretRef:
-              name: sc-openai3d3c8-secret
+                name: sc-openai3d3c8-secret
           livenessProbe:
             tcpSocket:
               port: 3000
