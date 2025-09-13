@@ -4,7 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeSanitize from "rehype-sanitize";
 import { FaCommentAlt, FaTimes, FaPaperPlane, FaRobot } from "react-icons/fa";
-import { mockResponder } from "../utils/mockChatResponder";
+// Client no longer selects provider; server auto-detects (azure > openai > mock). Optional ?provider=mock|azure|openai for overrides.
 
 // Basic message shape
 export type ChatMessage = {
@@ -94,7 +94,6 @@ const Chat: React.FC<ChatProps> = ({
     setMessages(newHistory);
 
     try {
-      const provider = process.env.NEXT_PUBLIC_CHAT_PROVIDER;
       // Create a placeholder assistant bubble that will show the thinking state
       const assistantId = crypto.randomUUID();
       setMessages((prev) => [
@@ -108,60 +107,51 @@ const Chat: React.FC<ChatProps> = ({
       ]);
       setThinkingId(assistantId);
 
-      if (!provider || provider === "mock") {
-        // Mock: replace placeholder content once answer is ready
-        const answer = await mockResponder(newHistory, trimmed);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: answer } : m
-          )
-        );
+      try {
+        let firstToken = true;
+        const forcedProvider =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("provider")
+            : null;
+        await streamChat(newHistory, forcedProvider || undefined, (delta) => {
+          if (firstToken) {
+            firstToken = false;
+            // stop animation before showing first token
+            setThinkingId(null);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId ? { ...m, content: delta } : m
+              )
+            );
+          } else {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId ? { ...m, content: m.content + delta } : m
+              )
+            );
+          }
+          // incremental scroll during streaming
+          if (listRef.current) {
+            listRef.current.scrollTop = listRef.current.scrollHeight;
+          }
+        });
+        // content accumulated in place
+        setMessages((prev) => prev);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Streaming failed";
+        setError(msg);
+        setMessages((prev) => [
+          ...prev.filter((m) => m.id !== assistantId),
+          {
+            id: crypto.randomUUID(),
+            role: "error",
+            content: msg
+              ? `Sorry, streaming failed: ${msg}`
+              : "Sorry, streaming failed.",
+            createdAt: Date.now(),
+          },
+        ]);
         setThinkingId(null);
-      } else {
-        try {
-          let firstToken = true;
-          await streamChat(newHistory, (delta) => {
-            if (firstToken) {
-              firstToken = false;
-              // stop animation before showing first token
-              setThinkingId(null);
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, content: delta } : m
-                )
-              );
-            } else {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId
-                    ? { ...m, content: m.content + delta }
-                    : m
-                )
-              );
-            }
-            // incremental scroll during streaming
-            if (listRef.current) {
-              listRef.current.scrollTop = listRef.current.scrollHeight;
-            }
-          });
-          // content accumulated in place
-          setMessages((prev) => prev);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : "Streaming failed";
-          setError(msg);
-          setMessages((prev) => [
-            ...prev.filter((m) => m.id !== assistantId),
-            {
-              id: crypto.randomUUID(),
-              role: "error",
-              content: msg
-                ? `Sorry, streaming failed: ${msg}`
-                : "Sorry, streaming failed.",
-              createdAt: Date.now(),
-            },
-          ]);
-          setThinkingId(null);
-        }
       }
     } catch {
       setError("Failed to get response. Try again.");
@@ -183,17 +173,20 @@ const Chat: React.FC<ChatProps> = ({
 
   async function streamChat(
     history: ChatMessage[],
+    provider: string | undefined,
     onDelta: (t: string) => void
   ): Promise<string> {
+    const payload: Record<string, unknown> = {
+      messages: history.map((m) => ({ role: m.role, content: m.content })),
+    };
+    if (provider) payload.provider = provider; // optional override (?provider=mock etc.)
     const resp = await fetch("/api/chat", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
       },
-      body: JSON.stringify({
-        messages: history.map((m) => ({ role: m.role, content: m.content })),
-      }),
+      body: JSON.stringify(payload),
     });
     if (!resp.ok) {
       let detail = "";
@@ -229,7 +222,8 @@ const Chat: React.FC<ChatProps> = ({
         const sentinel = payload.trim();
         if (!sentinel) continue; // still skip empty events
         if (sentinel === "[DONE]") return full;
-        if (sentinel === "[ERROR]") throw new Error("remote error");
+        if (sentinel.startsWith("[ERROR]"))
+          throw new Error(sentinel.slice(7).trim() || "remote error");
         full += payload;
         onDelta(payload);
       }

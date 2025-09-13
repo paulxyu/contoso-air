@@ -8,3 +8,5 @@ metadata:
     kubernetes.azure.com/generator: devhub
 data:
   NEXT_PUBLIC_CHAT_PROVIDER: azure
+  AZURE_OPENAI_DEPLOYMENT: gpt-5-mini
+  AZURE_OPENAI_API_VERSION: 2024-12-01-preview
