@@ -7,3 +7,4 @@ metadata:
     app.kubernetes.io/name: contoso-air
     kubernetes.azure.com/generator: devhub
 data:
+  NEXT_PUBLIC_CHAT_PROVIDER: azure
