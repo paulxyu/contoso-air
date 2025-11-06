@@ -98,14 +98,14 @@ MI_PRINCIPAL_ID=$(az identity show \
 az role assignment create \
 --role "Cognitive Services OpenAI Contributor" \
 --assignee-object-id $MI_PRINCIPAL_ID \
---assignee-type ServicePrincipal \
+--assignee-principal-type ServicePrincipal \
 --scope $AOAI_ID
 
 # assign role to your account too
 az role assignment create \
 --role "Cognitive Services OpenAI Contributor" \
 --assignee-object-id $(az ad signed-in-user show --query id -o tsv) \
---assignee-type User \
+--assignee-principal-type User \
 --scope $AOAI_ID
 ```
 
